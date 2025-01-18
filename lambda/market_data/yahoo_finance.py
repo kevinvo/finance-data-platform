@@ -201,20 +201,16 @@ def handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]:
         period = event.get("period", "1d")
 
         # Initialize ETL class
-        etl = YahooFinanceETL(bucket_name) if bucket_name else None
+        etl = YahooFinanceETL(bucket_name=bucket_name) if bucket_name else None
 
         # Process each symbol
         results: List[ProcessingResult] = []
         for symbol in symbols:
             try:
-                # Fetch stock data
                 stock_prices = etl.fetch_stock_data(symbol, period) if etl else []
-
-                # Write to S3 only if bucket is configured
                 if etl and bucket_name:
                     etl.write_to_s3(stock_prices, symbol)
 
-                # Fetch additional info
                 stock_info = etl.get_stock_info(symbol) if etl else None
 
                 results.append(
@@ -250,11 +246,6 @@ def handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # Example usage
     test_event = {"symbols": ["AAPL", "MSFT", "GOOGL"], "period": "1d"}
-
-    # Run the handler
     result = handler(event=test_event)
-
-    # Pretty print the results
     print(json.dumps(json.loads(result["body"]), indent=2))
