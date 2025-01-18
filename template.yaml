@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Finance Data Platform
+
+Resources:
+  YahooFinanceETL:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./lambda
+      Handler: market_data.yahoo_finance.handler
+      Runtime: python3.9
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          BUCKET_NAME: test-bucket
+      Layers:
+        - !Ref DependenciesLayer
+
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: finance-dependencies
+      ContentUri: ./layer/
+      CompatibleRuntimes:
+        - python3.9

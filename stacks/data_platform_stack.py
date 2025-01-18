@@ -47,15 +47,16 @@ class DataPlatformStack(Stack):
         dependencies_layer = create_dependencies_layer(
             scope=self, id="FinanceDependencies"
         )
+
         # Create Lambda functions for each data source
         self.create_market_data_lambda(dependencies_layer)
-        self.create_company_financials_lambda(dependencies_layer)
-        self.create_economic_indicators_lambda(dependencies_layer)
-        self.create_news_data_lambda(dependencies_layer)
+        # self.create_company_financials_lambda(dependencies_layer)
+        # self.create_economic_indicators_lambda(dependencies_layer)
+        # self.create_news_data_lambda(dependencies_layer)
 
     def create_market_data_lambda(self, layer: _lambda.LayerVersion) -> None:
         """Create Lambda function for market data."""
-        lambda_fn = _lambda.Function(
+        yahoo_finance_lambda_fn = _lambda.Function(
             self,
             "YahooFinanceETL",
             runtime=_lambda.Runtime.PYTHON_3_9,
@@ -64,19 +65,17 @@ class DataPlatformStack(Stack):
             layers=[layer],
             timeout=Duration.minutes(5),
             memory_size=512,
-            environment={"BUCKET_NAME": self.data_bucket.bucket_name},
+            environment={"BUCKET_NAME": self.raw_bucket.bucket_name},
         )
 
-        self.data_bucket.grant_read_write(lambda_fn)
+        self.raw_bucket.grant_read_write(yahoo_finance_lambda_fn)
 
         # Daily schedule at market close
         events.Rule(
             self,
             "MarketDataSchedule",
-            schedule=events.Schedule.cron(
-                minute="0", hour="16", day="*", month="*", year="*"  # 4 PM EST
-            ),
-            targets=[targets.LambdaFunction(lambda_fn)],
+            schedule=events.Schedule.rate(Duration.minutes(10)),
+            targets=[targets.LambdaFunction(yahoo_finance_lambda_fn)],
         )
 
     # def create_company_financials_lambda(self, layer: _lambda.LayerVersion) -> None:
@@ -90,11 +89,11 @@ class DataPlatformStack(Stack):
     #         timeout=Duration.minutes(10),
     #         memory_size=1024,
     #         environment={
-    #             "BUCKET_NAME": self.data_bucket.bucket_name
+    #             "BUCKET_NAME": self.raw_bucket.bucket_name
     #         }
     #     )
 
-    #     self.data_bucket.grant_read_write(lambda_fn)
+    #     self.raw_bucket.grant_read_write(lambda_fn)
 
     #     # Weekly schedule on Monday
     #     events.Rule(
@@ -120,12 +119,12 @@ class DataPlatformStack(Stack):
     #         timeout=Duration.minutes(5),
     #         memory_size=512,
     #         environment={
-    #             "BUCKET_NAME": self.data_bucket.bucket_name,
+    #             "BUCKET_NAME": self.raw_bucket.bucket_name,
     #             "FRED_API_KEY": SecretValue.secrets_manager('fred-api-key').to_string()
     #         }
     #     )
 
-    #     self.data_bucket.grant_read_write(lambda_fn)
+    #     self.raw_bucket.grant_read_write(lambda_fn)
 
     #     # Daily schedule
     #     events.Rule(
@@ -151,12 +150,12 @@ class DataPlatformStack(Stack):
     #         timeout=Duration.minutes(5),
     #         memory_size=512,
     #         environment={
-    #             "BUCKET_NAME": self.data_bucket.bucket_name,
+    #             "BUCKET_NAME": self.raw_bucket.bucket_name,
     #             "NEWS_API_KEY": SecretValue.secrets_manager('news-api-key').to_string()
     #         }
     #     )
 
-    #     self.data_bucket.grant_read_write(lambda_fn)
+    #     self.raw_bucket.grant_read_write(lambda_fn)
 
     #     # Hourly schedule
     #     events.Rule(
