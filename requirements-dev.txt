@@ -1,0 +1,6 @@
+### requirements-dev.txt ###
+pytest==7.4.0
+pytest-mock==3.11.1
+moto==4.2.4
+aws-cdk-lib>=2.0.0
+constructs>=10.0.0
