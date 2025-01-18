@@ -2,6 +2,9 @@
 .cdk.staging
 cdk.out/
 
+# Lambda Layers
+layer/
+
 # Python specific
 __pycache__/
 *.py[cod]
@@ -30,7 +33,6 @@ env/
 ENV/
 .env
 .venv
-virtual/
 
 # IDE specific files
 .idea/
@@ -54,3 +56,4 @@ htmlcov/
 
 # Logs
 *.log 
+virtual/
