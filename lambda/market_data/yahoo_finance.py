@@ -7,6 +7,7 @@ import json
 import logging
 import os
 
+# Set up logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -68,6 +69,10 @@ class YahooFinanceETL:
             ticker = yf.Ticker(symbol)
             history = ticker.history(period=period)
 
+            if history.empty:
+                logger.warning(f"No data available for {symbol}")
+                return []
+
             stock_prices = []
             prev_close = None
 
@@ -95,10 +100,21 @@ class YahooFinanceETL:
 
         except Exception as e:
             logger.error(f"Error fetching data for {symbol}: {str(e)}")
-            # raise
+            return []
 
     def write_to_s3(self, stock_prices: List[StockPrice], symbol: str) -> None:
+        """
+        Write stock prices to S3.
+
+        Args:
+            stock_prices: List of StockPrice objects
+            symbol: Stock symbol for partitioning
+        """
         try:
+            if not stock_prices:
+                logger.warning(f"No data to write for {symbol}")
+                return
+
             # Convert to list of dictionaries
             data = [asdict(price) for price in stock_prices]
             json_data = json.dumps(data, default=str)
@@ -117,9 +133,17 @@ class YahooFinanceETL:
 
         except Exception as e:
             logger.error(f"Error writing to S3 for {symbol}: {str(e)}")
-            # raise
 
     def get_stock_info(self, symbol: str) -> StockInfo:
+        """
+        Fetch additional stock information.
+
+        Args:
+            symbol: Stock symbol
+
+        Returns:
+            StockInfo object
+        """
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
@@ -150,37 +174,48 @@ class YahooFinanceETL:
             )
 
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]:
     """
     Lambda handler for fetching Yahoo Finance data.
+    Can be run both locally and in AWS Lambda.
 
-    Event format:
-    {
-        "symbols": ["AAPL", "MSFT", "GOOGL"],
-        "period": "1d"  # optional
-    }
+    Args:
+        event: Dictionary with:
+            - symbols: List of stock symbols
+            - period: Time period to fetch (optional)
+        context: AWS Lambda context (optional)
+
+    Returns:
+        Dictionary with status code and results
     """
     try:
-        # Get environment variables
-        bucket_name = os.environ["BUCKET_NAME"]
+        # Get bucket name from environment or use None for local testing
+        bucket_name = os.environ.get("BUCKET_NAME")
+
+        # Log the configuration
+        logger.info(f"Starting handler with bucket: {bucket_name}")
+        logger.info(f"Event: {event}")
 
         # Get parameters from event
         symbols = event.get("symbols", ["AAPL", "MSFT", "GOOGL"])
         period = event.get("period", "1d")
 
         # Initialize ETL class
-        etl = YahooFinanceETL(bucket_name)
+        etl = YahooFinanceETL(bucket_name) if bucket_name else None
 
         # Process each symbol
         results: List[ProcessingResult] = []
         for symbol in symbols:
             try:
-                # Fetch and write stock data
-                stock_prices = etl.fetch_stock_data(symbol, period)
-                etl.write_to_s3(stock_prices, symbol)
+                # Fetch stock data
+                stock_prices = etl.fetch_stock_data(symbol, period) if etl else []
 
-                # Fetch and store additional info
-                stock_info = etl.get_stock_info(symbol)
+                # Write to S3 only if bucket is configured
+                if etl and bucket_name:
+                    etl.write_to_s3(stock_prices, symbol)
+
+                # Fetch additional info
+                stock_info = etl.get_stock_info(symbol) if etl else None
 
                 results.append(
                     ProcessingResult(
@@ -192,6 +227,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 )
 
             except Exception as e:
+                logger.error(f"Error processing {symbol}: {str(e)}")
                 results.append(
                     ProcessingResult(symbol=symbol, status="error", error=str(e))
                 )
@@ -214,6 +250,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # For local testing
+    # Example usage
     test_event = {"symbols": ["AAPL", "MSFT", "GOOGL"], "period": "1d"}
-    print(handler(test_event, None))
+
+    # Run the handler
+    result = handler(event=test_event)
+
+    # Pretty print the results
+    print(json.dumps(json.loads(result["body"]), indent=2))
