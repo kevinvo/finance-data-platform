@@ -225,8 +225,8 @@ class DataPlatformStack(Stack):
                 "--spark-event-logs-path": f"s3://{self.raw_bucket.bucket_name}/spark-logs/",
                 "--continuous-log-logGroup": glue_log_group.log_group_name,
                 "--enable-job-insights": "true",
-                "--additional-python-modules": "requests==2.31.0,yfinance==0.2.36"
-            }
+                "--additional-python-modules": "requests==2.31.0,yfinance==0.2.36",
+            },
         )
 
         # Output the CloudWatch Log Group name
@@ -238,12 +238,7 @@ class DataPlatformStack(Stack):
         )
 
         # Output the Glue Job name using ref instead of name
-        CfnOutput(
-            self, 
-            "GlueJobName", 
-            value=glue_job.ref,
-            description="Glue Job Name"
-        )
+        CfnOutput(self, "GlueJobName", value=glue_job.ref, description="Glue Job Name")
 
         # Grant Glue role access to scripts bucket
         self.scripts_bucket.grant_read(glue_role)
@@ -260,8 +255,8 @@ class DataPlatformStack(Stack):
             catalog_id=Stack.of(self).account,
             database_input=glue.CfnDatabase.DatabaseInputProperty(
                 name="finance_data_catalog",
-                description="Database for processed finance data"
-            )
+                description="Database for processed finance data",
+            ),
         )
 
         # Create Glue Crawler
@@ -282,10 +277,9 @@ class DataPlatformStack(Stack):
                 ]
             ),
             schema_change_policy=glue.CfnCrawler.SchemaChangePolicyProperty(
-                delete_behavior="LOG",
-                update_behavior="UPDATE_IN_DATABASE"
+                delete_behavior="LOG", update_behavior="UPDATE_IN_DATABASE"
             ),
-            configuration="{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+            configuration='{"Version":1.0,"CrawlerOutput":{"Partitions":{"AddOrUpdateBehavior":"InheritFromTable"},"Tables":{"AddOrUpdateBehavior":"MergeNewColumns"}}}',
         )
 
         # Add crawler outputs
@@ -293,14 +287,14 @@ class DataPlatformStack(Stack):
             self,
             "GlueDatabaseName",
             value=glue_database.ref,
-            description="Glue Database Name"
+            description="Glue Database Name",
         )
 
         CfnOutput(
             self,
             "GlueCrawlerName",
             value=finance_crawler.ref,
-            description="Glue Crawler Name"
+            description="Glue Crawler Name",
         )
 
         # Add crawler permissions to Glue role
@@ -326,8 +320,8 @@ class DataPlatformStack(Stack):
                     f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:catalog",
                     f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:database/{glue_database.ref}",
                     f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:table/{glue_database.ref}/*",
-                    f"arn:aws:athena:{Stack.of(self).region}:{Stack.of(self).account}:workgroup/*"
-                ]
+                    f"arn:aws:athena:{Stack.of(self).region}:{Stack.of(self).account}:workgroup/*",
+                ],
             )
         )
 
@@ -341,7 +335,7 @@ class DataPlatformStack(Stack):
                 s3.LifecycleRule(
                     expiration=Duration.days(7)  # Clean up old query results
                 )
-            ]
+            ],
         )
 
         # Grant Athena access to results bucket
@@ -349,11 +343,16 @@ class DataPlatformStack(Stack):
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 principals=[iam.ServicePrincipal("athena.amazonaws.com")],
-                actions=["s3:GetBucketLocation", "s3:GetObject", "s3:ListBucket", "s3:PutObject"],
+                actions=[
+                    "s3:GetBucketLocation",
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:PutObject",
+                ],
                 resources=[
                     athena_results_bucket.bucket_arn,
-                    f"{athena_results_bucket.bucket_arn}/*"
-                ]
+                    f"{athena_results_bucket.bucket_arn}/*",
+                ],
             )
         )
 
@@ -362,7 +361,7 @@ class DataPlatformStack(Stack):
             self,
             "AthenaResultsBucketName",
             value=athena_results_bucket.bucket_name,
-            description="Bucket for Athena query results"
+            description="Bucket for Athena query results",
         )
 
         # Create Athena workgroup using CloudFormation
@@ -380,9 +379,9 @@ class DataPlatformStack(Stack):
                     },
                     "EnforceWorkGroupConfiguration": True,
                     "PublishCloudWatchMetricsEnabled": True,
-                    "BytesScannedCutoffPerQuery": 1073741824
-                }
-            }
+                    "BytesScannedCutoffPerQuery": 1073741824,
+                },
+            },
         )
 
         # Make sure workgroup is created after the bucket
@@ -393,5 +392,5 @@ class DataPlatformStack(Stack):
             self,
             "AthenaWorkGroupName",
             value="finance-analysis",
-            description="Athena Workgroup Name"
+            description="Athena Workgroup Name",
         )

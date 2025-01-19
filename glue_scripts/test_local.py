@@ -63,7 +63,7 @@ yahoo_df = yahoo_df.select(
     col("volume"),
     col("daily_return"),
     col("fetch_timestamp"),
-    col("hour")
+    col("hour"),
 )
 
 # Process EDGAR Finance data
@@ -73,7 +73,7 @@ edgar_df = edgar_df.select(
     col("company_name"),
     col("filing_type"),
     col("filing_url"),
-    col("fetch_timestamp")
+    col("fetch_timestamp"),
 )
 
 # Convert date columns to the same format
@@ -114,7 +114,7 @@ combined_df = yahoo_df.join(
     when(col("close").isNotNull(), lit("yahoo"))
     .when(col("filing_type").isNotNull(), lit("edgar"))
     .otherwise(lit("unknown"))
-    .alias("data_source")
+    .alias("data_source"),
 )
 
 # Show results
