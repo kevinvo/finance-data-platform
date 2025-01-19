@@ -1,4 +1,5 @@
 {
-    "symbols": ["AAPL", "MSFT", "GOOGL"],
-    "period": "1d"
+    "symbols": ["AAPL", "MSFT", "GOOGL", "AMZN", "META"],
+    "period": "1d",
+    "metrics": ["Close", "Volume", "High", "Low"]
 }

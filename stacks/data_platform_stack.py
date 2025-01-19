@@ -53,6 +53,7 @@ class DataPlatformStack(Stack):
         )
 
         self.create_market_data_lambda(dependencies_layer)
+        self.create_edgar_finance_lambda(dependencies_layer)
 
     def create_market_data_lambda(self, layer: _lambda.LayerVersion) -> None:
         """Create Lambda function for market data."""
@@ -66,7 +67,6 @@ class DataPlatformStack(Stack):
             timeout=Duration.minutes(5),
             memory_size=512,
             environment={"BUCKET_NAME": self.raw_bucket.bucket_name},
-            log_retention=logs.RetentionDays.ONE_MONTH,
         )
 
         # Add CloudWatch Logs permissions
@@ -92,4 +92,46 @@ class DataPlatformStack(Stack):
             "MarketDataSchedule",
             schedule=events.Schedule.rate(Duration.hours(1)),
             targets=[targets.LambdaFunction(yahoo_finance_lambda_fn)],
+        )
+
+    def create_edgar_finance_lambda(self, layer: _lambda.LayerVersion) -> None:
+        """Create Lambda function for EDGAR financial data."""
+        edgar_finance_lambda_fn = _lambda.Function(
+            self,
+            "EDGARFinanceETL",
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            handler="company_financials.edgar_finance.handler",
+            code=_lambda.Code.from_asset("lambda"),
+            layers=[layer],
+            timeout=Duration.minutes(15),  # Longer timeout as EDGAR API can be slower
+            memory_size=512,
+            environment={
+                "BUCKET_NAME": self.raw_bucket.bucket_name,
+            },
+        )
+
+        # Add CloudWatch Logs permissions
+        edgar_finance_lambda_fn.role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "service-role/AWSLambdaBasicExecutionRole"
+            )
+        )
+
+        # Output the actual function name
+        CfnOutput(
+            self,
+            "EDGARFinanceLambdaName",
+            value=edgar_finance_lambda_fn.function_name,
+            description="EDGAR Finance Lambda Function Name",
+        )
+
+        # Grant S3 permissions
+        self.raw_bucket.grant_read_write(edgar_finance_lambda_fn)
+
+        # Daily schedule (once per day is enough for financial statements)
+        events.Rule(
+            self,
+            "EDGARFinanceSchedule",
+            schedule=events.Schedule.rate(Duration.days(1)),
+            targets=[targets.LambdaFunction(edgar_finance_lambda_fn)],
         )
