@@ -158,14 +158,14 @@ class DataPlatformStack(Stack):
         )
 
     def create_data_processing_job(self) -> None:
-        """Create Glue Job for data processing."""
+        """Create Glue Job and Crawler for data processing."""
         # Deploy Glue script to S3
         s3deploy.BucketDeployment(
             self,
             "DeployGlueScript",
             sources=[s3deploy.Source.asset("glue_scripts")],
-            destination_bucket=self.raw_bucket,
-            destination_key_prefix="glue-scripts",
+            destination_bucket=self.scripts_bucket,
+            destination_key_prefix="",
         )
 
         # Create CloudWatch Log Group for Glue job
@@ -200,6 +200,8 @@ class DataPlatformStack(Stack):
         glue_job = glue.CfnJob(
             self,
             "DataProcessingJob",
+            name="finance-data-processing-job",
+            role=glue_role.role_arn,
             command=glue.CfnJob.JobCommandProperty(
                 name="glueetl",
                 python_version="3",
@@ -207,11 +209,23 @@ class DataPlatformStack(Stack):
             ),
             glue_version="4.0",
             worker_type="G.1X",
-            # Specify custom image
+            number_of_workers=2,
+            timeout=120,
+            max_retries=2,
             execution_property=glue.CfnJob.ExecutionPropertyProperty(
                 max_concurrent_runs=1
             ),
-            image_uri=f"{account}.dkr.ecr.{region}.amazonaws.com/custom-glue-image:latest",
+            default_arguments={
+                "--enable-metrics": "true",
+                "--enable-continuous-cloudwatch-log": "true",
+                "--job-language": "python",
+                "--TempDir": f"s3://{self.raw_bucket.bucket_name}/temporary/",
+                "--enable-spark-ui": "true",
+                "--spark-event-logs-path": f"s3://{self.raw_bucket.bucket_name}/spark-logs/",
+                "--continuous-log-logGroup": glue_log_group.log_group_name,
+                "--enable-job-insights": "true",
+                "--additional-python-modules": "requests==2.31.0,yfinance==0.2.36"
+            }
         )
 
         # Output the CloudWatch Log Group name
@@ -222,8 +236,89 @@ class DataPlatformStack(Stack):
             description="Glue Job CloudWatch Log Group",
         )
 
-        # Output the Glue Job name
-        CfnOutput(self, "GlueJobName", value=glue_job.name, description="Glue Job Name")
+        # Output the Glue Job name using ref instead of name
+        CfnOutput(
+            self, 
+            "GlueJobName", 
+            value=glue_job.ref,
+            description="Glue Job Name"
+        )
 
         # Grant Glue role access to scripts bucket
         self.scripts_bucket.grant_read(glue_role)
+
+        # Create crawler with the same role
+        self.create_glue_crawler(glue_role)
+
+    def create_glue_crawler(self, glue_role: iam.Role) -> None:
+        """Create Glue Crawler for processed data."""
+        # Create Glue Database
+        glue_database = glue.CfnDatabase(
+            self,
+            "FinanceDatabase",
+            catalog_id=Stack.of(self).account,
+            database_input=glue.CfnDatabase.DatabaseInputProperty(
+                name="finance_data_catalog",
+                description="Database for processed finance data"
+            )
+        )
+
+        # Create Glue Crawler
+        finance_crawler = glue.CfnCrawler(
+            self,
+            "FinanceDataCrawler",
+            name="finance-data-crawler",
+            role=glue_role.role_arn,
+            database_name=glue_database.ref,
+            schedule=glue.CfnCrawler.ScheduleProperty(
+                schedule_expression="cron(0 */12 * * ? *)"  # Run every 12 hours
+            ),
+            targets=glue.CfnCrawler.TargetsProperty(
+                s3_targets=[
+                    glue.CfnCrawler.S3TargetProperty(
+                        path=f"s3://{self.processed_bucket.bucket_name}/combined_finance_data"
+                    )
+                ]
+            ),
+            schema_change_policy=glue.CfnCrawler.SchemaChangePolicyProperty(
+                delete_behavior="LOG",
+                update_behavior="UPDATE_IN_DATABASE"
+            ),
+            configuration="{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+        )
+
+        # Add crawler outputs
+        CfnOutput(
+            self,
+            "GlueDatabaseName",
+            value=glue_database.ref,
+            description="Glue Database Name"
+        )
+
+        CfnOutput(
+            self,
+            "GlueCrawlerName",
+            value=finance_crawler.ref,
+            description="Glue Crawler Name"
+        )
+
+        # Add crawler permissions to Glue role
+        glue_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "glue:GetDatabase",
+                    "glue:GetTable",
+                    "glue:GetPartition",
+                    "glue:CreateTable",
+                    "glue:UpdateTable",
+                    "glue:CreatePartition",
+                    "glue:UpdatePartition"
+                ],
+                resources=[
+                    f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:catalog",
+                    f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:database/{glue_database.ref}",
+                    f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:table/{glue_database.ref}/*"
+                ]
+            )
+        )
