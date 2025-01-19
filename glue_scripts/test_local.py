@@ -14,11 +14,6 @@ spark = (
         "spark.hadoop.fs.s3a.aws.credentials.provider",
         "com.amazonaws.auth.DefaultAWSCredentialsProviderChain",
     )
-    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-    .config(
-        "spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.delta.catalog.DeltaCatalog",
-    )
     .getOrCreate()
 )
 
@@ -35,11 +30,11 @@ raw_bucket = "financedataplatform-raw-data"
 processed_bucket = "financedataplatform-processed-data"
 
 # Read Yahoo Finance data
-yahoo_finance_path = f"s3a://{raw_bucket}/market_data/"
+yahoo_finance_path = f"s3a://{raw_bucket}/raw/market_data/"
 yahoo_df = (
     spark.read.option("header", "true")
     .option("inferSchema", "true")
-    .parquet(yahoo_finance_path)
+    .json(yahoo_finance_path)
 )
 
 # Read EDGAR Finance data

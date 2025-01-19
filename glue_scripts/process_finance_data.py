@@ -22,19 +22,19 @@ raw_bucket = "financedataplatform-raw-data"
 processed_bucket = "financedataplatform-processed-data"
 
 # Read Yahoo Finance data
-yahoo_finance_path = f"s3://{raw_bucket}/market_data/"
+yahoo_finance_path = f"s3://{raw_bucket}/raw/market_data/"
 yahoo_df = (
     spark.read.option("header", "true")
     .option("inferSchema", "true")
-    .parquet(yahoo_finance_path)
+    .json(yahoo_finance_path)
 )
 
 # Read EDGAR Finance data
-edgar_finance_path = f"s3://{raw_bucket}/company_financials/"
+edgar_finance_path = f"s3://{raw_bucket}/raw/company_financials/"
 edgar_df = (
     spark.read.option("header", "true")
     .option("inferSchema", "true")
-    .parquet(edgar_finance_path)
+    .json(edgar_finance_path)
 )
 
 # Process Yahoo Finance data
