@@ -1,7 +1,6 @@
-numpy==1.24.3
-pandas==2.0.3
+peewee==3.16.2
 yfinance==0.2.36
 boto3==1.34.11
-requests==2.31.0
+requests==2.32.3
 fredapi==0.5.1
 python-dateutil==2.8.2
