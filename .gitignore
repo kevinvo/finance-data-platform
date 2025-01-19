@@ -57,3 +57,4 @@ htmlcov/
 # Logs
 *.log 
 virtual/
+response.json
