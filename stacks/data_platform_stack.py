@@ -313,12 +313,53 @@ class DataPlatformStack(Stack):
                     "glue:CreateTable",
                     "glue:UpdateTable",
                     "glue:CreatePartition",
-                    "glue:UpdatePartition"
+                    "glue:UpdatePartition",
+                    "athena:StartQueryExecution",
+                    "athena:GetQueryExecution",
+                    "athena:GetQueryResults",
+                    "athena:GetWorkGroup",
+                    "athena:CreateWorkGroup",
+                    "athena:BatchGetQueryExecution",
                 ],
                 resources=[
                     f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:catalog",
                     f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:database/{glue_database.ref}",
-                    f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:table/{glue_database.ref}/*"
+                    f"arn:aws:glue:{Stack.of(self).region}:{Stack.of(self).account}:table/{glue_database.ref}/*",
+                    f"arn:aws:athena:{Stack.of(self).region}:{Stack.of(self).account}:workgroup/*"
                 ]
             )
+        )
+
+        # Create S3 bucket for Athena query results
+        athena_results_bucket = s3.Bucket(
+            self,
+            "AthenaResultsBucket",
+            bucket_name=f"{self.stack_name.lower()}-athena-results",
+            removal_policy=RemovalPolicy.RETAIN,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    expiration=Duration.days(7)  # Clean up old query results
+                )
+            ]
+        )
+
+        # Grant Athena access to results bucket
+        athena_results_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("athena.amazonaws.com")],
+                actions=["s3:GetBucketLocation", "s3:GetObject", "s3:ListBucket", "s3:PutObject"],
+                resources=[
+                    athena_results_bucket.bucket_arn,
+                    f"{athena_results_bucket.bucket_arn}/*"
+                ]
+            )
+        )
+
+        # Output Athena results bucket name with a different ID
+        CfnOutput(
+            self,
+            "AthenaResultsBucketName",
+            value=athena_results_bucket.bucket_name,
+            description="Bucket for Athena query results"
         )
