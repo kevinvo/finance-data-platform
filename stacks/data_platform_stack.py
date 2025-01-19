@@ -52,11 +52,7 @@ class DataPlatformStack(Stack):
             scope=self, id="FinanceDependencies"
         )
 
-        # Create Lambda functions for each data source
         self.create_market_data_lambda(dependencies_layer)
-        # self.create_company_financials_lambda(dependencies_layer)
-        # self.create_economic_indicators_lambda(dependencies_layer)
-        # self.create_news_data_lambda(dependencies_layer)
 
     def create_market_data_lambda(self, layer: _lambda.LayerVersion) -> None:
         """Create Lambda function for market data."""
