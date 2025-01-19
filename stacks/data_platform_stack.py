@@ -13,6 +13,7 @@ from aws_cdk import (
     aws_s3_deployment as s3deploy,
     RemovalPolicy,
     CfnOutput,
+    CfnResource,
 )
 from constructs import Construct
 from stacks.lambda_layer import create_dependencies_layer
@@ -362,4 +363,35 @@ class DataPlatformStack(Stack):
             "AthenaResultsBucketName",
             value=athena_results_bucket.bucket_name,
             description="Bucket for Athena query results"
+        )
+
+        # Create Athena workgroup using CloudFormation
+        athena_workgroup = CfnResource(
+            self,
+            "FinanceAnalysisWorkGroup",
+            type="AWS::Athena::WorkGroup",
+            properties={
+                "Name": "finance-analysis",
+                "Description": "Workgroup for analyzing finance data",
+                "State": "ENABLED",
+                "WorkGroupConfiguration": {
+                    "ResultConfiguration": {
+                        "OutputLocation": f"s3://{athena_results_bucket.bucket_name}/query-results/"
+                    },
+                    "EnforceWorkGroupConfiguration": True,
+                    "PublishCloudWatchMetricsEnabled": True,
+                    "BytesScannedCutoffPerQuery": 1073741824
+                }
+            }
+        )
+
+        # Make sure workgroup is created after the bucket
+        athena_workgroup.node.add_dependency(athena_results_bucket)
+
+        # Output the workgroup name
+        CfnOutput(
+            self,
+            "AthenaWorkGroupName",
+            value="finance-analysis",
+            description="Athena Workgroup Name"
         )
