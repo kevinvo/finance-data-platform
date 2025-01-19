@@ -4,10 +4,14 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_events as events,
     aws_events_targets as targets,
+    aws_logs as logs,
+    aws_iam as iam,
     Duration,
     SecretValue,
+    aws_s3 as s3,
+    RemovalPolicy,
+    CfnOutput,
 )
-from aws_cdk import Stack, aws_s3 as s3, RemovalPolicy, CfnOutput
 from constructs import Construct
 from stacks.lambda_layer import create_dependencies_layer
 
@@ -56,6 +60,15 @@ class DataPlatformStack(Stack):
 
     def create_market_data_lambda(self, layer: _lambda.LayerVersion) -> None:
         """Create Lambda function for market data."""
+        # Create log group first
+        log_group = logs.LogGroup(
+            self,
+            "YahooFinanceLogGroup",
+            log_group_name="/aws/lambda/DataPlatformStack-YahooFinanceETL",
+            retention=logs.RetentionDays.ONE_MONTH,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         yahoo_finance_lambda_fn = _lambda.Function(
             self,
             "YahooFinanceETL",
@@ -66,6 +79,29 @@ class DataPlatformStack(Stack):
             timeout=Duration.minutes(5),
             memory_size=512,
             environment={"BUCKET_NAME": self.raw_bucket.bucket_name},
+            log_retention=logs.RetentionDays.ONE_MONTH,
+        )
+
+        # Add CloudWatch Logs permissions
+        yahoo_finance_lambda_fn.role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "service-role/AWSLambdaBasicExecutionRole"
+            )
+        )
+
+        # Output the actual function name and log group name
+        CfnOutput(
+            self,
+            "YahooFinanceLambdaName",
+            value=yahoo_finance_lambda_fn.function_name,
+            description="Yahoo Finance Lambda Function Name"
+        )
+
+        CfnOutput(
+            self,
+            "YahooFinanceLogGroupName", 
+            value=log_group.log_group_name,
+            description="Yahoo Finance Log Group Name"
         )
 
         self.raw_bucket.grant_read_write(yahoo_finance_lambda_fn)
@@ -74,7 +110,7 @@ class DataPlatformStack(Stack):
         events.Rule(
             self,
             "MarketDataSchedule",
-            schedule=events.Schedule.rate(Duration.minutes(10)),
+            schedule=events.Schedule.rate(Duration.minutes(2)),
             targets=[targets.LambdaFunction(yahoo_finance_lambda_fn)],
         )
 

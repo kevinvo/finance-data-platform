@@ -135,15 +135,6 @@ class YahooFinanceETL:
             logger.error(f"Error writing to S3 for {symbol}: {str(e)}")
 
     def get_stock_info(self, symbol: str) -> StockInfo:
-        """
-        Fetch additional stock information.
-
-        Args:
-            symbol: Stock symbol
-
-        Returns:
-            StockInfo object
-        """
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
@@ -191,6 +182,7 @@ def handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]:
     try:
         # Get bucket name from environment or use None for local testing
         bucket_name = os.environ.get("BUCKET_NAME")
+        print(f"Bucket name: {bucket_name}")
 
         # Log the configuration
         logger.info(f"Starting handler with bucket: {bucket_name}")

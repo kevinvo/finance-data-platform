@@ -13,7 +13,7 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          BUCKET_NAME: test-bucket
+          BUCKET_NAME: market-data-etl-test-bucket
       Layers:
         - !Ref DependenciesLayer
 
