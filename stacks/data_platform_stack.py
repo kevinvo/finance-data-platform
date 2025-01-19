@@ -60,15 +60,6 @@ class DataPlatformStack(Stack):
 
     def create_market_data_lambda(self, layer: _lambda.LayerVersion) -> None:
         """Create Lambda function for market data."""
-        # Create log group first
-        log_group = logs.LogGroup(
-            self,
-            "YahooFinanceLogGroup",
-            log_group_name="/aws/lambda/DataPlatformStack-YahooFinanceETL",
-            retention=logs.RetentionDays.ONE_MONTH,
-            removal_policy=RemovalPolicy.DESTROY
-        )
-
         yahoo_finance_lambda_fn = _lambda.Function(
             self,
             "YahooFinanceETL",
@@ -89,19 +80,12 @@ class DataPlatformStack(Stack):
             )
         )
 
-        # Output the actual function name and log group name
+        # Output the actual function name
         CfnOutput(
             self,
             "YahooFinanceLambdaName",
             value=yahoo_finance_lambda_fn.function_name,
-            description="Yahoo Finance Lambda Function Name"
-        )
-
-        CfnOutput(
-            self,
-            "YahooFinanceLogGroupName", 
-            value=log_group.log_group_name,
-            description="Yahoo Finance Log Group Name"
+            description="Yahoo Finance Lambda Function Name",
         )
 
         self.raw_bucket.grant_read_write(yahoo_finance_lambda_fn)
@@ -110,92 +94,6 @@ class DataPlatformStack(Stack):
         events.Rule(
             self,
             "MarketDataSchedule",
-            schedule=events.Schedule.rate(Duration.minutes(2)),
+            schedule=events.Schedule.rate(Duration.hours(1)),
             targets=[targets.LambdaFunction(yahoo_finance_lambda_fn)],
         )
-
-    # def create_company_financials_lambda(self, layer: _lambda.LayerVersion) -> None:
-    #     """Create Lambda function for SEC EDGAR data."""
-    #     lambda_fn = _lambda.Function(
-    #         self, "EDGARFinancialsETL",
-    #         runtime=_lambda.Runtime.PYTHON_3_9,
-    #         handler="company_financials.edgar.handler",
-    #         code=_lambda.Code.from_asset("lambda"),
-    #         layers=[layer],
-    #         timeout=Duration.minutes(10),
-    #         memory_size=1024,
-    #         environment={
-    #             "BUCKET_NAME": self.raw_bucket.bucket_name
-    #         }
-    #     )
-
-    #     self.raw_bucket.grant_read_write(lambda_fn)
-
-    #     # Weekly schedule on Monday
-    #     events.Rule(
-    #         self, "CompanyFinancialsSchedule",
-    #         schedule=events.Schedule.cron(
-    #             minute="0",
-    #             hour="0",
-    #             day="MON",
-    #             month="*",
-    #             year="*"
-    #         ),
-    #         targets=[targets.LambdaFunction(lambda_fn)]
-    #     )
-
-    # def create_economic_indicators_lambda(self, layer: _lambda.LayerVersion) -> None:
-    #     """Create Lambda function for FRED data."""
-    #     lambda_fn = _lambda.Function(
-    #         self, "FREDIndicatorsETL",
-    #         runtime=_lambda.Runtime.PYTHON_3_9,
-    #         handler="economic_indicators.fred.handler",
-    #         code=_lambda.Code.from_asset("lambda"),
-    #         layers=[layer],
-    #         timeout=Duration.minutes(5),
-    #         memory_size=512,
-    #         environment={
-    #             "BUCKET_NAME": self.raw_bucket.bucket_name,
-    #             "FRED_API_KEY": SecretValue.secrets_manager('fred-api-key').to_string()
-    #         }
-    #     )
-
-    #     self.raw_bucket.grant_read_write(lambda_fn)
-
-    #     # Daily schedule
-    #     events.Rule(
-    #         self, "EconomicIndicatorsSchedule",
-    #         schedule=events.Schedule.cron(
-    #             minute="0",
-    #             hour="1",
-    #             day="*",
-    #             month="*",
-    #             year="*"
-    #         ),
-    #         targets=[targets.LambdaFunction(lambda_fn)]
-    #     )
-
-    # def create_news_data_lambda(self, layer: _lambda.LayerVersion) -> None:
-    #     """Create Lambda function for News API data."""
-    #     lambda_fn = _lambda.Function(
-    #         self, "NewsDataETL",
-    #         runtime=_lambda.Runtime.PYTHON_3_9,
-    #         handler="news_data.news_api.handler",
-    #         code=_lambda.Code.from_asset("lambda"),
-    #         layers=[layer],
-    #         timeout=Duration.minutes(5),
-    #         memory_size=512,
-    #         environment={
-    #             "BUCKET_NAME": self.raw_bucket.bucket_name,
-    #             "NEWS_API_KEY": SecretValue.secrets_manager('news-api-key').to_string()
-    #         }
-    #     )
-
-    #     self.raw_bucket.grant_read_write(lambda_fn)
-
-    #     # Hourly schedule
-    #     events.Rule(
-    #         self, "NewsDataSchedule",
-    #         schedule=events.Schedule.rate(Duration.hours(1)),
-    #         targets=[targets.LambdaFunction(lambda_fn)]
-    #     )

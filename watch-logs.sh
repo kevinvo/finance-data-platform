@@ -1,5 +1,7 @@
 #!/bin/bash
 
+LOG_GROUP="/aws/lambda/DataPlatformStack-YahooFinanceETL"
+REGION="ap-southeast-2"  # Replace with your region
 LOG_GROUP_NAME="/aws/lambda/FinanceDataPlatform-YahooFinanceETL3C2DA848-tXfVFdec0ulQ"
 INTERVAL=2  # seconds between checks
 
