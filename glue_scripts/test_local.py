@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, when, lit, to_date
+from pyspark.sql.functions import col, when, lit, to_date, coalesce
 import boto3
 
 # Initialize Spark with AWS Hadoop configuration
@@ -37,6 +37,10 @@ yahoo_df = (
     .json(yahoo_finance_path)
 )
 
+# Print schemas to see available columns
+print("\nYahoo Finance Schema:")
+yahoo_df.printSchema()
+
 # Read EDGAR Finance data
 edgar_finance_path = f"s3a://{raw_bucket}/raw/company_financials/"
 edgar_df = (
@@ -44,6 +48,9 @@ edgar_df = (
     .option("inferSchema", "true")
     .json(edgar_finance_path)
 )
+
+print("\nEDGAR Finance Schema:")
+edgar_df.printSchema()
 
 # Process Yahoo Finance data
 yahoo_df = yahoo_df.select(
@@ -54,19 +61,19 @@ yahoo_df = yahoo_df.select(
     col("low"),
     col("close"),
     col("volume"),
-    col("dividends"),
-    col("stock_splits"),
+    col("daily_return"),
+    col("fetch_timestamp"),
+    col("hour")
 )
 
 # Process EDGAR Finance data
 edgar_df = edgar_df.select(
     col("symbol").alias("ticker"),
     col("filing_date").alias("date"),
-    col("total_assets"),
-    col("total_liabilities"),
-    col("total_equity"),
-    col("net_income"),
-    col("revenue"),
+    col("company_name"),
+    col("filing_type"),
+    col("filing_url"),
+    col("fetch_timestamp")
 )
 
 # Convert date columns to the same format
@@ -84,31 +91,30 @@ combined_df = yahoo_df.join(
     edgar_df,
     (yahoo_df.ticker == edgar_df.ticker) & (yahoo_df.date == edgar_df.date),
     "outer",
-)
-
-# Add source column and handle duplicates
-combined_df = combined_df.select(
-    col("ticker"),
-    col("date"),
+).select(
+    # Use yahoo_df.ticker as the primary ticker
+    yahoo_df.ticker.alias("ticker"),
+    # Use coalesce to handle null dates from either source
+    coalesce(yahoo_df.date, edgar_df.date).alias("date"),
     # Market data
     col("open"),
     col("high"),
     col("low"),
     col("close"),
     col("volume"),
-    col("dividends"),
-    col("stock_splits"),
+    col("daily_return"),
+    yahoo_df.fetch_timestamp.alias("market_data_timestamp"),
+    col("hour"),
     # Financial data
-    col("total_assets"),
-    col("total_liabilities"),
-    col("total_equity"),
-    col("net_income"),
-    col("revenue"),
+    col("company_name"),
+    col("filing_type"),
+    col("filing_url"),
+    edgar_df.fetch_timestamp.alias("filing_timestamp"),
     # Add data source indicator
     when(col("close").isNotNull(), lit("yahoo"))
-    .when(col("total_assets").isNotNull(), lit("edgar"))
+    .when(col("filing_type").isNotNull(), lit("edgar"))
     .otherwise(lit("unknown"))
-    .alias("data_source"),
+    .alias("data_source")
 )
 
 # Show results
